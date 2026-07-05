@@ -1,0 +1,900 @@
+<!DOCTYPE html>
+<html lang="id">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Orak-arik PDF — Toolkit PDF Gratis</title>
+
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@400;500;600;700&family=DM+Sans:opsz,wght@9..40,400;9..40,500;9..40,600;9..40,700&display=swap" rel="stylesheet">
+
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script>
+        tailwind.config = {
+            theme: {
+                extend: {
+                    fontFamily: {
+                        display: ['"Space Grotesk"', 'sans-serif'],
+                        body: ['"DM Sans"', 'sans-serif'],
+                    },
+                    colors: {
+                        base: { 950:'#080604', 900:'#0c0a08', 800:'#141210', 700:'#1c1916', 600:'#24201c', 500:'#2e2924' },
+                        amber: { accent:'#e8a020', bright:'#f5be3a', dim:'#b07818' },
+                        txt: { primary:'#ede8e0', secondary:'#a09888', muted:'#6a6258' },
+                        ln: { default:'#2a2520', hover:'#3d3530' },
+                        ok:'#4ade80', err:'#f87171',
+                    },
+                    boxShadow: {
+                        'amber':'0 4px 24px -4px rgba(232,160,32,0.25)',
+                        'amber-lg':'0 8px 40px -8px rgba(232,160,32,0.35)',
+                        'inner-amber':'inset 0 0 24px rgba(232,160,32,0.06)',
+                    }
+                }
+            }
+        }
+    </script>
+
+    <script src="https://unpkg.com/vue@3/dist/vue.global.prod.js"></script>
+    <script src="https://unpkg.com/pdf-lib@1.17.1/dist/pdf-lib.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/jszip/3.10.1/jszip.min.js"></script>
+    <script src="https://unpkg.com/lucide@latest"></script>
+
+    <style>
+        body { background:#0c0a08; }
+
+        ::-webkit-scrollbar { width:6px; height:6px; }
+        ::-webkit-scrollbar-track { background:transparent; }
+        ::-webkit-scrollbar-thumb { background:#2a2520; border-radius:3px; }
+        ::-webkit-scrollbar-thumb:hover { background:#e8a020; }
+
+        .fade-enter-active,.fade-leave-active { transition:opacity .2s ease; }
+        .fade-enter-from,.fade-leave-to { opacity:0; }
+
+        .slide-up-enter-active,.slide-up-leave-active { transition:all .35s cubic-bezier(.16,1,.3,1); }
+        .slide-up-enter-from { opacity:0; transform:translateY(16px) scale(.96); }
+        .slide-up-leave-to { opacity:0; transform:translateY(-10px); }
+
+        .dot-bg {
+            background-image: radial-gradient(circle, rgba(232,160,32,0.04) 1px, transparent 1px);
+            background-size: 28px 28px;
+        }
+
+        .ambient-blob {
+            position:absolute; border-radius:50%; pointer-events:none;
+            filter:blur(100px); opacity:.06;
+            animation: blobDrift 22s ease-in-out infinite alternate;
+        }
+        .ambient-blob:nth-child(2) { animation-delay:-8s; animation-duration:28s; }
+        .ambient-blob:nth-child(3) { animation-delay:-15s; animation-duration:25s; }
+
+        @keyframes blobDrift {
+            0%   { transform:translate(0,0) scale(1); }
+            33%  { transform:translate(40px,-50px) scale(1.12); }
+            66%  { transform:translate(-30px,30px) scale(.92); }
+            100% { transform:translate(15px,-15px) scale(1.05); }
+        }
+
+        .drag-over-indicator {
+            outline:2px dashed #e8a020; outline-offset:-2px;
+            background:rgba(232,160,32,0.06);
+        }
+        .dragging-src { opacity:.4; transform:scale(.96); }
+
+        @keyframes pulseRing {
+            0%   { transform:scale(1); opacity:.5; }
+            100% { transform:scale(1.6); opacity:0; }
+        }
+        .pulse-ring::before {
+            content:''; position:absolute; inset:-8px;
+            border:2px solid #e8a020; border-radius:inherit;
+            animation: pulseRing 2s ease-out infinite;
+        }
+
+        .tool-card {
+            transition: transform .35s cubic-bezier(.16,1,.3,1),
+                        border-color .25s ease,
+                        box-shadow .35s ease,
+                        background .25s ease;
+        }
+        .tool-card:hover {
+            transform:translateY(-4px);
+            border-color:#e8a020;
+            box-shadow:0 8px 40px -8px rgba(232,160,32,0.3);
+        }
+        .tool-card:hover .card-icon-wrap {
+            background:#e8a020; border-color:#e8a020;
+        }
+        .tool-card:hover .card-icon-wrap i { color:#fff; }
+        .tool-card:hover .card-arrow { opacity:1; transform:translateX(0); }
+
+        .card-icon-wrap { transition: background .25s ease, border-color .25s ease; }
+        .card-icon-wrap i { transition: color .25s ease; }
+        .card-arrow { opacity:0; transform:translateX(-8px); transition: all .3s ease; }
+
+        .btn-back {
+            display:inline-flex; align-items:center; gap:6px;
+            padding:6px 14px; border-radius:10px;
+            font-size:13px; font-weight:500;
+            color:#a09888; background:transparent;
+            border:1px solid transparent;
+            transition: all .2s ease;
+            white-space:nowrap;
+        }
+        .btn-back:hover {
+            color:#ede8e0; background:#1c1916; border-color:#2a2520;
+        }
+
+        @media (prefers-reduced-motion:reduce) {
+            *, *::before, *::after {
+                animation-duration:0.01ms !important;
+                animation-iteration-count:1 !important;
+                transition-duration:0.01ms !important;
+            }
+        }
+    </style>
+</head>
+
+<body class="h-screen font-body text-sm antialiased selection:bg-amber-accent selection:text-base-900">
+
+<div id="app" class="flex h-full w-full overflow-hidden">
+
+    <!-- ==================== SIDEBAR (Desktop) ==================== -->
+    <aside class="hidden md:flex w-60 flex-shrink-0 bg-base-800 border-r border-ln-default flex-col z-20">
+        <div class="h-16 flex items-center px-5 border-b border-ln-default shrink-0">
+            <img
+                src="https://i.ibb.co.com/N6qL0x15/orak-arik-pdf.png"
+                alt="Orak-arik PDF"
+                class="w-8 h-8 rounded-lg object-contain mr-3 flex-shrink-0"
+                onerror="this.style.display='none'; this.nextElementSibling.style.display='flex';">
+            <div class="w-8 h-8 rounded-lg bg-gradient-to-br from-amber-accent to-amber-dim items-center justify-center mr-3 flex-shrink-0" style="display:none;">
+                <i data-lucide="file-text" class="w-4 h-4 text-white"></i>
+            </div>
+            <div class="min-w-0">
+                <span class="font-display font-bold text-txt-primary tracking-tight text-[15px] block leading-tight">Orak-arik PDF</span>
+                <span class="text-[10px] text-txt-muted leading-none">Toolkit PDF Gratis</span>
+            </div>
+        </div>
+
+        <nav class="flex-1 py-3 px-3 space-y-0.5 overflow-y-auto" role="navigation" aria-label="Menu alat">
+            <button v-for="tool in tools" :key="tool.id"
+                @click="navigate(tool.id)"
+                :class="['w-full flex items-center gap-3 px-3 py-2.5 rounded-lg text-left transition-all duration-200 group',
+                    activeTool === tool.id
+                        ? 'bg-amber-accent/10 text-amber-accent shadow-inner-amber'
+                        : 'text-txt-secondary hover:text-txt-primary hover:bg-base-600']"
+                :aria-current="activeTool === tool.id ? 'page' : false">
+                <i :data-lucide="tool.icon" class="w-[18px] h-[18px] flex-shrink-0 transition-colors"
+                   :class="activeTool === tool.id ? 'text-amber-accent' : 'group-hover:text-amber-accent'"></i>
+                <span class="text-[13px] font-medium truncate">{{ tool.name }}</span>
+            </button>
+        </nav>
+
+        <!-- Footer sidebar dengan kredit pembuat -->
+        <div class="p-4 border-t border-ln-default shrink-0 space-y-2.5">
+            <div class="flex items-center justify-center gap-1.5 text-txt-muted">
+                <i data-lucide="shield-check" class="w-3.5 h-3.5"></i>
+                <span class="text-[11px] font-medium">100% Lokal & Gratis</span>
+            </div>
+            <div class="flex items-center justify-center gap-1.5">
+                <i data-lucide="heart" class="w-3 h-3 text-amber-accent/50"></i>
+                <span class="text-[10px] text-txt-muted">created by: <span class="text-txt-secondary font-medium">Widodo Guru Sd</span></span>
+            </div>
+        </div>
+    </aside>
+
+    <!-- ==================== KONTEN UTAMA ==================== -->
+    <div class="flex-1 flex flex-col min-w-0 overflow-hidden">
+
+        <!-- Header mobile -->
+        <header class="md:hidden h-14 flex items-center px-4 border-b border-ln-default bg-base-800/95 backdrop-blur-xl z-20 shrink-0">
+            <button v-if="activeTool !== 'dashboard'" @click="navigateToDashboard"
+                class="btn-back -ml-2 mr-1" aria-label="Kembali ke dashboard">
+                <i data-lucide="arrow-left" class="w-4 h-4"></i>
+            </button>
+            <img
+                src="https://i.ibb.co.com/N6qL0x15/orak-arik-pdf.png"
+                alt="Orak-arik PDF"
+                class="w-7 h-7 rounded-lg object-contain flex-shrink-0"
+                onerror="this.style.display='none'; this.nextElementSibling.style.display='flex';">
+            <div class="w-7 h-7 rounded-lg bg-gradient-to-br from-amber-accent to-amber-dim items-center justify-center flex-shrink-0" style="display:none;">
+                <i data-lucide="file-text" class="w-3.5 h-3.5 text-white"></i>
+            </div>
+            <span class="font-display font-bold text-txt-primary text-sm truncate ml-2.5">
+                {{ activeTool === 'dashboard' ? 'Orak-arik PDF' : currentToolConfig?.name }}
+            </span>
+        </header>
+
+        <!-- Area konten -->
+        <main class="flex-1 overflow-hidden relative bg-base-900">
+
+            <!-- ========== DASHBOARD ========== -->
+            <div v-if="activeTool === 'dashboard'" class="h-full overflow-y-auto dot-bg">
+                <div class="ambient-blob w-[30rem] h-[30rem] bg-amber-accent -top-32 left-1/4" aria-hidden="true"></div>
+                <div class="ambient-blob w-[24rem] h-[24rem] bg-amber-dim bottom-0 right-1/6" aria-hidden="true"></div>
+                <div class="ambient-blob w-[18rem] h-[18rem] bg-amber-bright top-1/2 right-0" aria-hidden="true"></div>
+
+                <div class="relative z-10 max-w-4xl mx-auto px-6 pt-10 pb-20 md:pt-14">
+
+                    <!-- Logo Dashboard — kiri atas -->
+                    <div class="flex items-center gap-3.5 mb-10">
+                        <img
+                            src="https://i.ibb.co.com/N6qL0x15/orak-arik-pdf.png"
+                            alt="Orak-arik PDF"
+                            class="w-11 h-11 rounded-xl object-contain flex-shrink-0 shadow-amber"
+                            onerror="this.style.display='none'; this.nextElementSibling.style.display='flex';">
+                        <div class="w-11 h-11 rounded-xl bg-gradient-to-br from-amber-accent to-amber-dim items-center justify-center flex-shrink-0 shadow-amber" style="display:none;">
+                            <i data-lucide="file-text" class="w-5 h-5 text-white"></i>
+                        </div>
+                        <div>
+                            <h1 class="font-display font-bold text-txt-primary text-xl leading-tight tracking-tight">Orak-arik PDF</h1>
+                            <p class="text-xs text-txt-muted mt-0.5">Kreativitas tanpa batas, dokumen tanpa ribet.</p>
+                        </div>
+                    </div>
+
+                    <!-- Hero -->
+                    <div class="text-center mb-14">
+                        <div class="inline-flex items-center gap-2 px-3.5 py-1.5 rounded-full bg-amber-accent/10 border border-amber-accent/20 text-amber-accent text-xs font-medium mb-6">
+                            <i data-lucide="sparkles" class="w-3.5 h-3.5"></i>
+                            Semua proses berjalan lokal di browser Anda
+                        </div>
+                        <h2 class="font-display text-3xl sm:text-4xl md:text-5xl font-bold text-transparent bg-clip-text bg-gradient-to-r from-amber-bright via-amber-accent to-amber-dim mb-4 leading-tight">
+                            Semua Alat PDF<br>yang Anda Butuhkan
+                        </h2>
+                        <p class="text-txt-secondary text-base md:text-lg max-w-xl mx-auto leading-relaxed">
+                            Gabung, pisah, rotasi, urutkan, dan ekstrak halaman PDF — gratis, aman, tanpa upload ke server manapun.
+                        </p>
+                    </div>
+
+                    <!-- Kategori tool -->
+                    <section v-for="cat in toolCategories" :key="cat.name" class="mb-10">
+                        <div class="flex items-center gap-3 mb-5">
+                            <div class="w-1 h-6 rounded-full bg-amber-accent"></div>
+                            <div>
+                                <h3 class="font-display font-semibold text-txt-primary text-base">{{ cat.name }}</h3>
+                                <p class="text-xs text-txt-muted mt-0.5">{{ cat.desc }}</p>
+                            </div>
+                        </div>
+                        <div class="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                            <button v-for="toolId in cat.toolIds" :key="toolId"
+                                @click="navigate(toolId)"
+                                class="tool-card bg-base-800/80 backdrop-blur-sm border border-ln-default rounded-2xl p-5 flex items-start gap-4 text-left group"
+                                :aria-label="'Buka alat ' + getTool(toolId).name">
+                                <div class="card-icon-wrap w-12 h-12 rounded-xl bg-base-700 border border-ln-default flex items-center justify-center flex-shrink-0">
+                                    <i :data-lucide="getTool(toolId).icon" class="w-5 h-5 text-amber-accent"></i>
+                                </div>
+                                <div class="flex-1 min-w-0">
+                                    <div class="flex items-center justify-between">
+                                        <h4 class="font-display font-semibold text-txt-primary text-[15px] group-hover:text-amber-bright transition-colors">{{ getTool(toolId).name }}</h4>
+                                        <i data-lucide="arrow-right" class="card-arrow w-4 h-4 text-amber-accent flex-shrink-0"></i>
+                                    </div>
+                                    <p class="text-[13px] text-txt-muted leading-relaxed mt-1">{{ getTool(toolId).desc }}</p>
+                                </div>
+                            </button>
+                        </div>
+                    </section>
+
+                    <!-- Badge keamanan -->
+                    <div class="mt-16 flex flex-col sm:flex-row items-center justify-center gap-6 sm:gap-10 text-txt-muted">
+                        <div class="flex items-center gap-2.5">
+                            <div class="w-9 h-9 rounded-lg bg-ok/10 flex items-center justify-center">
+                                <i data-lucide="shield-check" class="w-4 h-4 text-ok"></i>
+                            </div>
+                            <div>
+                                <p class="text-sm font-medium text-txt-secondary">Privasi Terjaga</p>
+                                <p class="text-xs">File tidak keluar dari perangkat</p>
+                            </div>
+                        </div>
+                        <div class="flex items-center gap-2.5">
+                            <div class="w-9 h-9 rounded-lg bg-amber-accent/10 flex items-center justify-center">
+                                <i data-lucide="zap" class="w-4 h-4 text-amber-accent"></i>
+                            </div>
+                            <div>
+                                <p class="text-sm font-medium text-txt-secondary">Cepat & Ringan</p>
+                                <p class="text-xs">Proses langsung di browser</p>
+                            </div>
+                        </div>
+                        <div class="flex items-center gap-2.5">
+                            <div class="w-9 h-9 rounded-lg bg-amber-accent/10 flex items-center justify-center">
+                                <i data-lucide="infinity" class="w-4 h-4 text-amber-accent"></i>
+                            </div>
+                            <div>
+                                <p class="text-sm font-medium text-txt-secondary">Tanpa Batas</p>
+                                <p class="text-xs">Gunakan sebanyak yang diperlukan</p>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- Kredit pembuat — dashboard bawah -->
+                    <div class="mt-16 pt-8 border-t border-ln-default/50 text-center">
+                        <div class="flex items-center justify-center gap-1.5">
+                            <i data-lucide="heart" class="w-3 h-3 text-amber-accent/50"></i>
+                            <span class="text-[11px] text-txt-muted">created by: <span class="text-txt-secondary font-medium">Widodo Guru Sd</span></span>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- ========== TAMPILAN ALAT ========== -->
+            <div v-else class="h-full flex flex-col">
+
+                <!-- Header alat DESKTOP — dengan tombol kembali -->
+                <div class="hidden md:flex h-16 items-center px-6 border-b border-ln-default bg-base-800/50 backdrop-blur-md shrink-0 z-10">
+                    <button @click="navigateToDashboard" class="btn-back mr-3" aria-label="Kembali ke dashboard">
+                        <i data-lucide="arrow-left" class="w-4 h-4"></i>
+                        <span>Dashboard</span>
+                    </button>
+                    <div class="w-px h-6 bg-ln-default mr-5"></div>
+                    <div class="flex items-center gap-3 min-w-0">
+                        <div class="w-9 h-9 rounded-lg bg-amber-accent/10 border border-amber-accent/20 flex items-center justify-center flex-shrink-0">
+                            <i :data-lucide="currentToolConfig?.icon" class="w-4 h-4 text-amber-accent"></i>
+                        </div>
+                        <div class="min-w-0">
+                            <h2 class="font-display font-semibold text-txt-primary text-[15px] leading-tight">{{ currentToolConfig?.name }}</h2>
+                            <p class="text-xs text-txt-muted truncate">{{ currentToolConfig?.desc }}</p>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Area kerja -->
+                <div class="flex-1 overflow-hidden relative flex flex-col"
+                     @dragover.prevent="onZoneDragOver"
+                     @dragleave.prevent="onZoneDragLeave"
+                     @drop.prevent="onZoneDrop">
+
+                    <input type="file" ref="fileInput" class="hidden" accept="application/pdf"
+                           @change="onFileSelect" :multiple="currentToolConfig?.multi">
+
+                    <!-- Overlay drag -->
+                    <div v-if="hasFiles && dragOver"
+                         class="absolute inset-3 z-50 bg-base-900/90 border-2 border-dashed border-amber-accent rounded-2xl flex flex-col items-center justify-center backdrop-blur-md pointer-events-none">
+                        <i data-lucide="plus-circle" class="w-14 h-14 text-amber-accent mb-3 animate-bounce"></i>
+                        <p class="text-lg font-display font-semibold text-amber-bright">Lepaskan untuk menambah file</p>
+                    </div>
+
+                    <!-- Dropzone kosong -->
+                    <div v-if="!hasFiles && !isLoading" class="flex-1 p-6 flex items-center justify-center">
+                        <div :class="['w-full max-w-xl aspect-[16/10] max-h-[380px] border-2 border-dashed rounded-2xl flex flex-col items-center justify-center transition-all duration-300 cursor-pointer relative',
+                                    dragOver
+                                        ? 'border-amber-accent bg-amber-accent/[.08] shadow-amber-lg'
+                                        : 'border-ln-default hover:border-amber-accent/50 hover:bg-amber-accent/[.03] bg-base-800/30']"
+                             @click="$refs.fileInput.click()"
+                             role="button" tabindex="0" aria-label="Pilih file PDF"
+                             @keydown.enter="$refs.fileInput.click()">
+
+                            <div class="relative w-20 h-20 bg-base-700 border border-ln-default rounded-2xl flex items-center justify-center mb-5 pointer-events-none">
+                                <i data-lucide="cloud-upload" class="w-9 h-9 text-amber-accent"></i>
+                                <div class="absolute inset-0 rounded-2xl pulse-ring pointer-events-none"></div>
+                            </div>
+                            <h3 class="text-lg font-display font-semibold text-txt-primary pointer-events-none mb-1">Pilih file PDF</h3>
+                            <p class="text-sm text-txt-muted pointer-events-none mb-5">atau seret file ke sini</p>
+                            <span class="px-3 py-1.5 bg-base-700 rounded-lg border border-ln-default text-[11px] text-txt-muted pointer-events-none">
+                                Maks. 500MB per file
+                            </span>
+                        </div>
+                    </div>
+
+                    <!-- Loading -->
+                    <div v-if="isLoading" class="flex-1 flex items-center justify-center">
+                        <div class="text-center">
+                            <div class="w-12 h-12 border-[3px] border-amber-accent/20 border-t-amber-accent rounded-full animate-spin mx-auto mb-4"></div>
+                            <p class="text-txt-secondary font-medium">Memuat halaman...</p>
+                            <p class="text-xs text-txt-muted mt-1">Mohon tunggu sebentar</p>
+                        </div>
+                    </div>
+
+                    <!-- Workspace aktif -->
+                    <div v-if="hasFiles && !isLoading" class="flex-1 flex flex-col overflow-y-auto">
+
+                        <div class="p-5 md:p-7 flex-1 w-full max-w-7xl mx-auto flex flex-col pb-28">
+
+                            <!-- === GABUNG PDF === -->
+                            <div v-if="activeTool === 'merge'" class="flex flex-col">
+                                <div class="flex flex-wrap justify-between items-center mb-5 gap-3 bg-base-800/60 p-4 rounded-xl border border-ln-default shrink-0">
+                                    <span class="text-txt-secondary text-[13px]">
+                                        <span class="text-amber-accent font-bold">{{ files.length }}</span> file dipilih. Seret untuk mengubah urutan.
+                                    </span>
+                                    <button @click="$refs.fileInput.click()"
+                                        class="text-amber-accent hover:text-amber-bright flex items-center gap-2 text-[13px] font-medium transition-colors">
+                                        <i data-lucide="plus-circle" class="w-4 h-4"></i> Tambah file
+                                    </button>
+                                </div>
+                                <div class="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 gap-5">
+                                    <div v-for="(file, idx) in files" :key="file.id"
+                                         :class="['bg-base-800 border rounded-xl p-3.5 flex flex-col items-center group relative transition-all duration-200',
+                                                   dragIdx === idx ? 'dragging-src' : '',
+                                                   dragTargetIdx === idx && dragIdx !== idx ? 'drag-over-indicator' : '',
+                                                   'border-ln-default hover:border-amber-accent/50']"
+                                         draggable="true"
+                                         @dragstart="onItemDragStart(idx, $event)"
+                                         @dragover.prevent="onItemDragOver(idx)"
+                                         @drop.prevent="onItemDrop(idx)"
+                                         @dragend="onItemDragEnd">
+
+                                        <button @click.stop="removeFile(idx)"
+                                            class="absolute top-2 right-2 bg-err/90 text-white p-1.5 rounded-lg opacity-0 group-hover:opacity-100 transition-opacity hover:bg-err shadow-lg z-10"
+                                            :aria-label="'Hapus ' + file.name">
+                                            <i data-lucide="x" class="w-3.5 h-3.5"></i>
+                                        </button>
+
+                                        <div class="absolute -left-2 top-1/2 -translate-y-1/2 flex flex-col gap-0.5 opacity-0 group-hover:opacity-100 transition-opacity z-10">
+                                            <button @click.stop="moveItem(files, idx, idx-1)" :disabled="idx===0"
+                                                class="w-5 h-5 rounded bg-base-600 border border-ln-default flex items-center justify-center disabled:opacity-20 hover:bg-base-500 transition-colors"
+                                                aria-label="Pindah ke atas">
+                                                <i data-lucide="chevron-up" class="w-3 h-3 text-txt-secondary"></i>
+                                            </button>
+                                            <button @click.stop="moveItem(files, idx, idx+1)" :disabled="idx===files.length-1"
+                                                class="w-5 h-5 rounded bg-base-600 border border-ln-default flex items-center justify-center disabled:opacity-20 hover:bg-base-500 transition-colors"
+                                                aria-label="Pindah ke bawah">
+                                                <i data-lucide="chevron-down" class="w-3 h-3 text-txt-secondary"></i>
+                                            </button>
+                                        </div>
+
+                                        <div class="w-full aspect-[1/1.414] bg-white rounded-lg shadow-sm mb-2.5 flex items-center justify-center overflow-hidden border border-gray-200">
+                                            <img v-if="file.thumb" :src="file.thumb" class="w-full h-full object-cover pointer-events-none" alt="">
+                                            <div v-else class="w-full h-full bg-gray-100 flex items-center justify-center">
+                                                <i data-lucide="file-text" class="w-8 h-8 text-gray-300"></i>
+                                            </div>
+                                        </div>
+                                        <p class="text-[12px] truncate w-full text-center text-txt-primary font-medium">{{ file.name }}</p>
+                                        <p class="text-[11px] text-txt-muted mt-0.5">{{ formatSize(file.size) }} &middot; {{ file.pages }} hlm</p>
+                                    </div>
+                                </div>
+                            </div>
+
+                            <!-- === URUTKAN HALAMAN === -->
+                            <div v-if="activeTool === 'reorder'" class="flex flex-col">
+                                <div class="mb-5 flex items-center gap-3 bg-base-800/60 p-4 rounded-xl border border-ln-default shrink-0">
+                                    <i data-lucide="grip-vertical" class="w-5 h-5 text-amber-accent flex-shrink-0"></i>
+                                    <span class="text-txt-secondary text-[13px]">Seret halaman untuk mengubah urutan, atau gunakan tombol panah.</span>
+                                </div>
+                                <div class="grid grid-cols-2 sm:grid-cols-4 md:grid-cols-5 lg:grid-cols-6 gap-5">
+                                    <div v-for="(pg, idx) in pages" :key="pg.id"
+                                         :class="['bg-base-800 border rounded-xl p-3 transition-all duration-200 relative group flex flex-col items-center',
+                                                   dragIdx === idx ? 'dragging-src' : '',
+                                                   dragTargetIdx === idx && dragIdx !== idx ? 'drag-over-indicator' : '',
+                                                   'border-ln-default hover:border-amber-accent/50']"
+                                         draggable="true"
+                                         @dragstart="onItemDragStart(idx, $event)"
+                                         @dragover.prevent="onItemDragOver(idx)"
+                                         @drop.prevent="onPageDrop(idx)"
+                                         @dragend="onItemDragEnd">
+
+                                        <div class="absolute -top-2.5 -left-2.5 bg-amber-accent border-[3px] border-base-900 text-base-900 text-[11px] font-bold w-7 h-7 flex items-center justify-center rounded-full z-10 shadow-amber">
+                                            {{ idx + 1 }}
+                                        </div>
+
+                                        <div class="absolute -right-2 top-1/2 -translate-y-1/2 flex flex-col gap-0.5 opacity-0 group-hover:opacity-100 transition-opacity z-10">
+                                            <button @click.stop="moveItem(pages, idx, idx-1)" :disabled="idx===0"
+                                                class="w-5 h-5 rounded bg-base-600 border border-ln-default flex items-center justify-center disabled:opacity-20 hover:bg-base-500 transition-colors">
+                                                <i data-lucide="chevron-up" class="w-3 h-3 text-txt-secondary"></i>
+                                            </button>
+                                            <button @click.stop="moveItem(pages, idx, idx+1)" :disabled="idx===pages.length-1"
+                                                class="w-5 h-5 rounded bg-base-600 border border-ln-default flex items-center justify-center disabled:opacity-20 hover:bg-base-500 transition-colors">
+                                                <i data-lucide="chevron-down" class="w-3 h-3 text-txt-secondary"></i>
+                                            </button>
+                                        </div>
+
+                                        <div class="w-full aspect-[1/1.414] bg-white rounded-lg shadow-sm flex items-center justify-center overflow-hidden border border-gray-200">
+                                            <img :src="pg.thumb" class="w-full h-full object-cover pointer-events-none" alt="">
+                                        </div>
+                                    </div>
+                                </div>
+                            </div>
+
+                            <!-- === PISAH & EKSTRAK === -->
+                            <div v-if="activeTool === 'split' || activeTool === 'extract'" class="flex flex-col">
+                                <div class="mb-5 flex flex-col sm:flex-row sm:items-center justify-between gap-3 bg-base-800/60 p-4 rounded-xl border border-ln-default shrink-0">
+                                    <div v-if="activeTool === 'split'" class="flex gap-5">
+                                        <label class="flex items-center gap-2 cursor-pointer text-txt-secondary text-[13px] font-medium">
+                                            <input type="radio" v-model="splitMode" value="range" class="w-4 h-4 accent-amber-accent"> Rentang
+                                        </label>
+                                        <label class="flex items-center gap-2 cursor-pointer text-txt-secondary text-[13px] font-medium">
+                                            <input type="radio" v-model="splitMode" value="all" class="w-4 h-4 accent-amber-accent"> Semua Halaman
+                                        </label>
+                                    </div>
+                                    <div v-if="activeTool === 'split' && splitMode === 'range'" class="flex-1 sm:ml-4">
+                                        <input type="text" v-model="splitRange" placeholder="cth: 1-3, 5, 8-10"
+                                            class="w-full max-w-xs bg-base-700 border border-ln-default rounded-lg px-3.5 py-2 text-txt-primary text-[13px] placeholder-txt-muted focus:outline-none focus:border-amber-accent focus:ring-1 focus:ring-amber-accent/30 transition-all">
+                                    </div>
+                                    <div v-if="activeTool === 'extract'" class="flex items-center gap-2.5 flex-wrap">
+                                        <i data-lucide="mouse-pointer-click" class="w-4 h-4 text-amber-accent flex-shrink-0"></i>
+                                        <span class="text-txt-secondary text-[13px]">Klik halaman yang ingin diekstrak</span>
+                                        <span v-if="selectedPageCount > 0" class="ml-1 px-2 py-0.5 bg-amber-accent/15 text-amber-accent text-[11px] font-bold rounded-md">
+                                            {{ selectedPageCount }} dipilih
+                                        </span>
+                                    </div>
+                                </div>
+
+                                <div class="grid grid-cols-2 sm:grid-cols-4 md:grid-cols-5 lg:grid-cols-6 gap-5">
+                                    <div v-for="(pg, idx) in pages" :key="pg.id"
+                                         @click="activeTool === 'extract' ? togglePageSelection(idx) : null"
+                                         :class="['bg-base-800 border rounded-xl p-3 transition-all duration-200 relative group',
+                                                   pg.selected ? 'border-amber-accent shadow-amber bg-amber-accent/5' : 'border-ln-default',
+                                                   activeTool === 'extract' ? 'cursor-pointer hover:-translate-y-1' : 'cursor-default']">
+
+                                        <div v-if="pg.selected" class="absolute -top-2.5 -right-2.5 bg-amber-accent text-base-900 rounded-full p-1 z-10 shadow-amber border-[3px] border-base-900">
+                                            <i data-lucide="check" class="w-3 h-3"></i>
+                                        </div>
+
+                                        <div class="w-full aspect-[1/1.414] bg-white rounded-lg shadow-sm flex items-center justify-center overflow-hidden border border-gray-200 relative">
+                                            <span class="absolute bottom-1.5 right-1.5 bg-black/70 backdrop-blur-sm text-white font-medium text-[10px] px-1.5 py-0.5 rounded-md z-10">{{ pg.originalIndex + 1 }}</span>
+                                            <img :src="pg.thumb" class="w-full h-full object-cover pointer-events-none" alt="">
+                                        </div>
+                                    </div>
+                                </div>
+                            </div>
+
+                            <!-- === ROTASI === -->
+                            <div v-if="activeTool === 'rotate'" class="flex flex-col">
+                                <div class="mb-5 flex items-center gap-3 bg-base-800/60 p-4 rounded-xl border border-ln-default shrink-0">
+                                    <i data-lucide="rotate-cw" class="w-5 h-5 text-amber-accent flex-shrink-0"></i>
+                                    <span class="text-txt-secondary text-[13px]">Klik halaman untuk memutar 90° searah jarum jam.</span>
+                                </div>
+                                <div class="grid grid-cols-2 sm:grid-cols-4 md:grid-cols-5 lg:grid-cols-6 gap-5">
+                                    <div v-for="(pg, idx) in pages" :key="pg.id"
+                                         @click="rotatePage(idx)"
+                                         class="bg-base-800 border border-ln-default hover:border-amber-accent/50 rounded-xl p-3 cursor-pointer transition-all duration-200 relative flex flex-col items-center hover:-translate-y-1 group">
+
+                                        <div v-if="pg.rotation > 0"
+                                             class="absolute top-3 right-3 bg-amber-accent/90 text-base-900 font-bold text-[11px] px-2 py-0.5 rounded-md z-20 shadow-amber">
+                                            {{ pg.rotation }}°
+                                        </div>
+
+                                        <div class="w-full aspect-[1/1.414] bg-white rounded-lg shadow-sm flex items-center justify-center border border-gray-200 relative overflow-hidden">
+                                            <span class="absolute bottom-1.5 left-1.5 bg-black/70 backdrop-blur-sm text-white font-medium text-[10px] px-1.5 py-0.5 rounded-md z-20">{{ idx + 1 }}</span>
+                                            <img :src="pg.thumb"
+                                                 :style="{ transform:'rotate(' + pg.rotation + 'deg)' }"
+                                                 class="w-full h-full object-cover transition-transform duration-300 z-10 pointer-events-none" alt="">
+                                        </div>
+                                    </div>
+                                </div>
+                            </div>
+
+                        </div>
+
+                        <!-- Bar aksi bawah -->
+                        <div class="absolute bottom-0 left-0 right-0 h-[4.5rem] bg-base-800/95 backdrop-blur-xl border-t border-ln-default px-5 md:px-7 flex justify-between items-center z-30">
+                            <div class="flex items-center gap-4">
+                                <button @click="resetWorkspace" class="btn-back" aria-label="Mulai ulang">
+                                    <i data-lucide="rotate-ccw" class="w-4 h-4"></i>
+                                    <span class="hidden sm:inline">Mulai Ulang</span>
+                                </button>
+                                <!-- Kredit pembuat di bar bawah (mobile terlihat, desktop juga) -->
+                                <span class="md:hidden text-[10px] text-txt-muted">
+                                    <i data-lucide="heart" class="w-2.5 h-2.5 text-amber-accent/40 inline -mt-px"></i>
+                                    Widodo Guru Sd
+                                </span>
+                            </div>
+                            <button @click="executeProcess" :disabled="isProcessing || !canProcess"
+                                class="px-6 md:px-8 py-3 rounded-xl bg-amber-accent hover:bg-amber-bright disabled:opacity-40 disabled:hover:bg-amber-accent disabled:cursor-not-allowed text-base-900 font-semibold transition-all shadow-amber hover:shadow-amber-lg flex items-center gap-2.5 text-[13px]">
+                                <i v-if="isProcessing" data-lucide="loader-2" class="w-4 h-4 animate-spin"></i>
+                                <i v-else data-lucide="download" class="w-4 h-4"></i>
+                                {{ isProcessing ? processingText : ctaText }}
+                            </button>
+                        </div>
+
+                    </div>
+                </div>
+            </div>
+
+        </main>
+    </div>
+
+    <!-- ==================== TOAST ==================== -->
+    <Transition name="slide-up">
+        <div v-if="toast.show"
+             :class="['fixed top-5 right-5 md:top-7 md:right-7 px-5 py-3.5 rounded-xl border shadow-amber-lg flex items-center gap-3 z-50 backdrop-blur-md max-w-sm',
+                      toast.type === 'error'
+                          ? 'bg-err/15 border-err/30 text-red-200'
+                          : 'bg-base-800 border-amber-accent/30 text-amber-bright']"
+             role="alert">
+            <div :class="['p-1.5 rounded-full', toast.type === 'error' ? 'bg-err/20' : 'bg-amber-accent/15']">
+                <i :data-lucide="toast.type === 'error' ? 'alert-circle' : 'check-circle'" class="w-4 h-4"></i>
+            </div>
+            <span class="text-[13px] font-medium leading-snug">{{ toast.message }}</span>
+        </div>
+    </Transition>
+
+</div>
+
+<script>
+    pdfjsLib.GlobalWorkerOptions.workerSrc =
+        'https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.worker.min.js';
+
+    const { createApp, ref, computed, nextTick, onMounted } = Vue;
+
+    createApp({
+        setup() {
+            const tools = [
+                { id:'merge',   icon:'combine',       name:'Gabung PDF',      desc:'Satukan beberapa file PDF menjadi satu dokumen utuh.',                     multi:true  },
+                { id:'split',   icon:'scissors',       name:'Pisah PDF',       desc:'Pisahkan halaman atau simpan setiap halaman sebagai PDF terpisah.',      multi:false },
+                { id:'rotate',  icon:'rotate-cw',      name:'Rotasi PDF',      desc:'Putar halaman PDF sesuai kebutuhan Anda.',                              multi:false },
+                { id:'reorder', icon:'arrow-up-down',  name:'Urutkan Halaman', desc:'Seret dan lepas untuk mengatur ulang urutan halaman.',                 multi:false },
+                { id:'extract', icon:'file-output',    name:'Ekstrak Halaman', desc:'Pilih halaman tertentu untuk diekstrak ke PDF baru.',                  multi:false },
+            ];
+
+            const toolCategories = [
+                { name:'Operasi File',   desc:'Menggabungkan dan memisahkan dokumen',   toolIds:['merge','split'] },
+                { name:'Operasi Halaman', desc:'Memodifikasi tata letak halaman',        toolIds:['rotate','reorder','extract'] },
+            ];
+
+            const activeTool     = ref('dashboard');
+            const files          = ref([]);
+            const pages          = ref([]);
+            const dragOver       = ref(false);
+            const isProcessing   = ref(false);
+            const isLoading      = ref(false);
+            const processingText = ref('Memproses...');
+            const splitMode      = ref('range');
+            const splitRange     = ref('');
+            const toast          = ref({ show:false, message:'', type:'success' });
+            const fileInput      = ref(null);
+            const dragIdx        = ref(-1);
+            const dragTargetIdx  = ref(-1);
+
+            const currentToolConfig = computed(() =>
+                tools.find(t => t.id === activeTool.value) || null
+            );
+            const hasFiles = computed(() => files.value.length > 0);
+            const selectedPageCount = computed(() =>
+                pages.value.filter(p => p.selected).length
+            );
+            const canProcess = computed(() => {
+                if (!hasFiles.value) return false;
+                if (activeTool.value === 'merge' && files.value.length < 2) return false;
+                if (activeTool.value === 'extract' && selectedPageCount.value === 0) return false;
+                return true;
+            });
+            const ctaText = computed(() => ({
+                merge:'Gabung & Unduh', split:'Pisah & Unduh ZIP',
+                rotate:'Terapkan & Unduh', extract:'Ekstrak Terpilih',
+                reorder:'Terapkan Urutan & Unduh',
+            }[activeTool.value] || 'Proses & Unduh'));
+
+            function getTool(id) {
+                return tools.find(t => t.id === id) || { id, icon:'circle', name:id, desc:'' };
+            }
+
+            function formatSize(bytes) {
+                if (!bytes) return '0 B';
+                const k = 1024, sizes = ['B','KB','MB','GB'];
+                const i = Math.floor(Math.log(bytes) / Math.log(k));
+                return parseFloat((bytes / Math.pow(k, i)).toFixed(1)) + ' ' + sizes[i];
+            }
+
+            let toastTimer = null;
+            function showToast(msg, type = 'success') {
+                clearTimeout(toastTimer);
+                toast.value = { show:true, message:msg, type };
+                toastTimer = setTimeout(() => { toast.value.show = false; }, 4000);
+            }
+
+            let iconTimer = null;
+            function refreshIcons() {
+                clearTimeout(iconTimer);
+                iconTimer = setTimeout(() => nextTick(() => {
+                    if (typeof lucide !== 'undefined') lucide.createIcons();
+                }), 30);
+            }
+
+            function navigate(toolId) {
+                if (hasFiles.value && !confirm('Pindah ke alat lain? Progres saat ini akan hilang.')) return;
+                activeTool.value = toolId;
+                resetWorkspace();
+                refreshIcons();
+            }
+
+            function navigateToDashboard() {
+                if (activeTool.value === 'dashboard') return;
+                if (hasFiles.value && !confirm('Kembali ke dashboard? Progres saat ini akan hilang.')) return;
+                activeTool.value = 'dashboard';
+                resetWorkspace();
+                refreshIcons();
+            }
+
+            function resetWorkspace() {
+                files.value = []; pages.value = [];
+                isProcessing.value = false; isLoading.value = false;
+                splitRange.value = ''; splitMode.value = 'range';
+                dragIdx.value = -1; dragTargetIdx.value = -1;
+                if (fileInput.value) fileInput.value.value = '';
+            }
+
+            async function renderThumbnail(file) {
+                try {
+                    const data = new Uint8Array(await file.arrayBuffer());
+                    const pdf = await pdfjsLib.getDocument({ data }).promise;
+                    const page = await pdf.getPage(1);
+                    const vp = page.getViewport({ scale: 0.4 });
+                    const canvas = document.createElement('canvas');
+                    canvas.width  = Math.max(1, Math.round(vp.width));
+                    canvas.height = Math.max(1, Math.round(vp.height));
+                    await page.render({ canvasContext: canvas.getContext('2d'), viewport: vp }).promise;
+                    return { thumb: canvas.toDataURL('image/jpeg', 0.7), pageCount: pdf.numPages };
+                } catch (e) {
+                    console.error('Gagal render thumbnail:', e);
+                    return { thumb: '', pageCount: 0 };
+                }
+            }
+
+            async function loadSingleFilePages(fileObj) {
+                pages.value = []; isLoading.value = true;
+                try {
+                    const data = new Uint8Array(await fileObj.file.arrayBuffer());
+                    const pdf = await pdfjsLib.getDocument({ data }).promise;
+                    for (let i = 1; i <= pdf.numPages; i++) {
+                        const page = await pdf.getPage(i);
+                        const vp = page.getViewport({ scale: 0.25 });
+                        const canvas = document.createElement('canvas');
+                        canvas.width  = Math.max(1, Math.round(vp.width));
+                        canvas.height = Math.max(1, Math.round(vp.height));
+                        await page.render({ canvasContext: canvas.getContext('2d'), viewport: vp }).promise;
+                        pages.value.push({
+                            id: 'pg_' + i + '_' + Math.random().toString(36).substring(2, 7),
+                            originalIndex: i - 1,
+                            thumb: canvas.toDataURL('image/jpeg', 0.6),
+                            selected: false, rotation: 0,
+                        });
+                    }
+                } catch (e) {
+                    console.error('Gagal muat halaman:', e);
+                    showToast('Gagal memuat halaman PDF: ' + e.message, 'error');
+                } finally { isLoading.value = false; refreshIcons(); }
+            }
+
+            async function processFiles(newFiles) {
+                for (const f of newFiles) {
+                    if (f.type !== 'application/pdf') { showToast('Dilewati "' + f.name + '": bukan file PDF', 'error'); continue; }
+                    if (f.size > 500 * 1024 * 1024) { showToast('Dilewati "' + f.name + '": melebihi 500MB', 'error'); continue; }
+                    const meta = await renderThumbnail(f);
+                    const fileObj = {
+                        id: Math.random().toString(36).substring(2, 10),
+                        file: f, name: f.name, size: f.size,
+                        thumb: meta.thumb, pages: meta.pageCount,
+                    };
+                    if (currentToolConfig.value && !currentToolConfig.value.multi) {
+                        files.value = [fileObj]; await loadSingleFilePages(fileObj); break;
+                    } else { files.value.push(fileObj); }
+                }
+                refreshIcons();
+            }
+
+            function onZoneDragOver(e) { if (e.dataTransfer?.types.includes('Files') && activeTool.value !== 'dashboard') dragOver.value = true; }
+            function onZoneDragLeave() { dragOver.value = false; }
+            function onZoneDrop(e) { dragOver.value = false; if (activeTool.value === 'dashboard') return; if (e.dataTransfer?.files?.length) processFiles(e.dataTransfer.files); }
+            function onFileSelect(e) { if (e.target.files?.length) processFiles(e.target.files); e.target.value = ''; }
+
+            function onItemDragStart(idx, e) {
+                dragIdx.value = idx; e.dataTransfer.effectAllowed = 'move';
+                if (e.dataTransfer.setDragImage) {
+                    const g = e.currentTarget.cloneNode(true);
+                    g.style.cssText = 'opacity:.6;position:absolute;top:-9999px';
+                    document.body.appendChild(g);
+                    e.dataTransfer.setDragImage(g, 60, 80);
+                    requestAnimationFrame(() => document.body.removeChild(g));
+                }
+            }
+            function onItemDragOver(idx) { dragTargetIdx.value = idx; }
+            function onItemDrop(idx) { if (dragIdx.value >= 0 && dragIdx.value !== idx) moveItem(files, dragIdx.value, idx); }
+            function onPageDrop(idx) { if (dragIdx.value >= 0 && dragIdx.value !== idx) moveItem(pages, dragIdx.value, idx); }
+            function onItemDragEnd() { dragIdx.value = -1; dragTargetIdx.value = -1; }
+
+            function moveItem(arr, from, to) {
+                if (to < 0 || to >= arr.value.length) return;
+                const item = arr.value.splice(from, 1)[0];
+                arr.value.splice(to, 0, item);
+                dragIdx.value = -1; dragTargetIdx.value = -1; refreshIcons();
+            }
+
+            function removeFile(idx) { files.value.splice(idx, 1); if (!files.value.length) resetWorkspace(); refreshIcons(); }
+            function togglePageSelection(idx) { pages.value[idx].selected = !pages.value[idx].selected; }
+            function rotatePage(idx) { pages.value[idx].rotation = (pages.value[idx].rotation + 90) % 360; }
+
+            async function executeProcess() {
+                if (!canProcess.value || isProcessing.value) return;
+                isProcessing.value = true;
+                try {
+                    const { PDFDocument, degrees } = PDFLib;
+
+                    if (activeTool.value === 'merge') {
+                        processingText.value = 'Menggabungkan...';
+                        const merged = await PDFDocument.create();
+                        for (const f of files.value) {
+                            const src = await PDFDocument.load(await f.file.arrayBuffer());
+                            (await merged.copyPages(src, src.getPageIndices())).forEach(p => merged.addPage(p));
+                        }
+                        downloadBlob(await merged.save(), 'dokumen_gabung.pdf', 'application/pdf');
+                    }
+                    else if (activeTool.value === 'split') {
+                        processingText.value = 'Memisahkan...';
+                        const src = await PDFDocument.load(await files.value[0].file.arrayBuffer());
+                        const total = src.getPageCount(); const zip = new JSZip();
+                        if (splitMode.value === 'all') {
+                            for (let i = 0; i < total; i++) {
+                                const d = await PDFDocument.create();
+                                d.addPage((await d.copyPages(src, [i]))[0]);
+                                zip.file('halaman_' + (i+1) + '.pdf', await d.save());
+                            }
+                        } else {
+                            const ranges = splitRange.value.split(',').map(s => s.trim()).filter(Boolean);
+                            if (!ranges.length) throw new Error('Masukkan rentang halaman yang valid (cth: 1-3, 5).');
+                            for (const range of ranges) {
+                                const d = await PDFDocument.create(); let idx = [];
+                                if (range.includes('-')) {
+                                    const [a, b] = range.split('-').map(Number);
+                                    if (isNaN(a)||isNaN(b)||a<1||b>total||a>b) throw new Error('Rentang tidak valid: ' + range);
+                                    for (let i = a; i <= b; i++) idx.push(i-1);
+                                } else {
+                                    const n = Number(range);
+                                    if (isNaN(n)||n<1||n>total) throw new Error('Halaman tidak valid: ' + range);
+                                    idx.push(n-1);
+                                }
+                                (await d.copyPages(src, idx)).forEach(p => d.addPage(p));
+                                zip.file('pisah_' + range.replace('-', '_sampai_') + '.pdf', await d.save());
+                            }
+                        }
+                        processingText.value = 'Mengompres ZIP...';
+                        downloadBlob(await zip.generateAsync({ type:'blob' }), 'dokumen_pisah.zip', 'application/zip');
+                    }
+                    else if (activeTool.value === 'reorder') {
+                        processingText.value = 'Mengurutkan...';
+                        const src = await PDFDocument.load(await files.value[0].file.arrayBuffer());
+                        const d = await PDFDocument.create();
+                        (await d.copyPages(src, pages.value.map(p => p.originalIndex))).forEach(p => d.addPage(p));
+                        downloadBlob(await d.save(), 'dokumen_terurut.pdf', 'application/pdf');
+                    }
+                    else if (activeTool.value === 'extract') {
+                        processingText.value = 'Mengekstrak...';
+                        const idx = pages.value.filter(p => p.selected).map(p => p.originalIndex);
+                        if (!idx.length) throw new Error('Tidak ada halaman yang dipilih.');
+                        const src = await PDFDocument.load(await files.value[0].file.arrayBuffer());
+                        const d = await PDFDocument.create();
+                        (await d.copyPages(src, idx)).forEach(p => d.addPage(p));
+                        downloadBlob(await d.save(), 'halaman_ekstrak.pdf', 'application/pdf');
+                    }
+                    else if (activeTool.value === 'rotate') {
+                        processingText.value = 'Menerapkan rotasi...';
+                        const pdf = await PDFDocument.load(await files.value[0].file.arrayBuffer());
+                        const pp = pdf.getPages();
+                        pages.value.forEach(p => {
+                            if (p.rotation > 0) pp[p.originalIndex].setRotation(degrees(pp[p.originalIndex].getRotation().angle + p.rotation));
+                        });
+                        downloadBlob(await pdf.save(), 'dokumen_rotasi.pdf', 'application/pdf');
+                    }
+                    showToast('Berhasil! File telah diunduh.'); refreshIcons();
+                } catch (err) {
+                    console.error(err);
+                    showToast(err.message || 'Terjadi kesalahan saat memproses', 'error');
+                } finally { isProcessing.value = false; processingText.value = 'Memproses...'; }
+            }
+
+            function downloadBlob(data, filename, type) {
+                const blob = data instanceof Blob ? data : new Blob([data], { type });
+                const url = URL.createObjectURL(blob);
+                const a = document.createElement('a');
+                a.href = url; a.download = filename;
+                document.body.appendChild(a); a.click();
+                document.body.removeChild(a); URL.revokeObjectURL(url);
+            }
+
+            onMounted(() => { refreshIcons(); });
+
+            return {
+                tools, toolCategories,
+                activeTool, files, pages, dragOver, isProcessing, isLoading,
+                processingText, splitMode, splitRange, toast, fileInput,
+                dragIdx, dragTargetIdx,
+                currentToolConfig, hasFiles, selectedPageCount, canProcess, ctaText,
+                getTool, formatSize,
+                navigate, navigateToDashboard, resetWorkspace,
+                onZoneDragOver, onZoneDragLeave, onZoneDrop, onFileSelect,
+                onItemDragStart, onItemDragOver, onItemDrop, onPageDrop, onItemDragEnd, moveItem,
+                removeFile, togglePageSelection, rotatePage,
+                executeProcess,
+            };
+        }
+    }).mount('#app');
+</script>
+</body>
+</html>
